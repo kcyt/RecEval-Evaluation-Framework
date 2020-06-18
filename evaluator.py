@@ -1,4 +1,7 @@
 import numpy as np
+from dataset import Dataset
+from model import Model
+
 
 class Evaluator:
 
@@ -48,7 +51,7 @@ class Evaluator:
 			n_length_binary_hit_ranked_list = binary_hit_ranked_list[:n]
 			precision_at_k_score = self.precision_at_k(n_length_binary_hit_ranked_list, n_length_binary_hit_ranked_list.size)
 			average_precision_score = self.average_precision(n_length_binary_hit_ranked_list)
-			recall_at_k_score = self.recall_at_k(n_length_binary_hit_ranked_list, total_num_of_accepted_recommendations = 1)
+			recall_at_k_score = self.recall_at_k(n_length_binary_hit_ranked_list, num_of_actual_true_labels = 1)
 			ndcg_at_k_score = self.ndcg_at_k(n_length_binary_hit_ranked_list)
 
 			self.scores_list[i]['PREC@'+str(n)] += precision_at_k_score
@@ -57,11 +60,12 @@ class Evaluator:
 			self.scores_list[i]['NDCG@'+str(n)] += ndcg_at_k_score
 
 
+
 		
 
 	def print_results(self):
 		
-		print("Printing results after training on ", self.count_tuples_tested_on ," tuples")
+		print("Printing results after testing on ", self.count_tuples_tested_on ," tuples")
 
 		for metrics_dict in self.scores_list:
 			for key, value in metrics_dict.items():
@@ -95,13 +99,13 @@ class Evaluator:
 		sum_of_scores = [self.precision_at_k(binary_hit_ranked_list, k) for k in range(1, binary_hit_ranked_list.size + 1 ) if binary_hit_ranked_list[k-1]]
 		return np.mean(sum_of_scores)
 
-	def recall_at_k(self, binary_hit_ranked_list, total_num_of_accepted_recommendations = 1):
+	def recall_at_k(self, binary_hit_ranked_list, num_of_actual_true_labels = 1):
 		"""
 		compute the recall @ k 
 
 		param 'binary_hit_ranked_list':  A numpy array whose index that indicates whether there is a hit in that position or not.
 		Note: The value of k is implied by the length of binary_hit_ranked_list
-		param 'total_num_of_accepted_recommendations': The number of True Positives + False Negatives 
+		param 'num_of_actual_true_labels': The number of True Positives + False Negatives 
 													   Value is defaulted to 1 because model is given 1 test tuple at a time.
 
 		return recall @ k score 
@@ -109,7 +113,7 @@ class Evaluator:
 
 		"""
 
-		return np.sum(binary_hit_ranked_list)/ total_num_of_accepted_recommendations
+		return np.sum(binary_hit_ranked_list)/ num_of_actual_true_labels
 
 
 	def ndcg_at_k(self, binary_hit_ranked_list):
@@ -131,5 +135,45 @@ class Evaluator:
 		dcg_ranking = np.sum(binary_hit_ranked_list / np.log2(np.arange(2, binary_hit_ranked_list.size + 2)))  #
 
 		return dcg_ranking / dcg_ideal
+
+	def evaluateModel( self, dataset, model, num_of_tuples_to_use = 100):
+
+		"""
+
+		Evaluate the given model and print the evaluation results.
+
+		param 'dataset' must be a subclass of Dataset and implement the abstract methods
+		param 'model' must be a subclass of Model and implment the abstract methods
+
+		"""
+
+		if not isinstance(dataset, Dataset):
+			raise ValueError('Your dataset object needs to be a subclass of Dataset and implements the abstract methods.')
+
+		if not isinstance(model, Model):
+			raise ValueError('Your model needs to be a subclass of Model and implements the abstract methods.')
+
+
+		"""
+
+		'tuple' is a row of a Dataframe i.e. a Series
+		'list_of_recommendations' is a Dataframe of length n, where each row represents a recommended item. The 1st row should be the top item that the model would like to recommend.
+
+		"""
+
+		for iteration_no in range(num_of_tuples_to_use):
+			tuple = dataset.getNextTuple()
+			if tuple['train_test_label'] == 'Train':
+				model.update_model(tuple)
+			elif tuple['train_test_label'] == 'Test':
+				list_of_recommendations = model.test_model(tuple['userID'])
+				self.evaluateList(list_of_recommendations, tuple)
+
+				model.update_model(tuple) # train on the test tuple after the evaluation has been done.
+			else:
+				raise NotImplementedError
+
+		self.print_results()
+
 
 

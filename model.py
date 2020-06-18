@@ -13,6 +13,7 @@ class Model:
 		self.n = n 
  
 
+	# Abstract method
 	def update_model(self, train_tuple):
 		"""
 		param 'train_tuple': is the tuple given to the model for training purpose.
@@ -23,16 +24,19 @@ class Model:
 
 		"""
 
-		pass
+		raise NotImplementedError("Please override and implement the 'update_model(self, train_tuple)' method in your model")
 
 
+	# Abstract method
 	def test_model(self, test_tuple_userID):
 		"""
 
 		Retrieve a ranked list of items based only on the userID of the test_tuple
 
 		"""
-		pass
+		
+		raise NotImplementedError("Please override and implement the 'test_model(self, test_tuple_userID)' method in your model")
+
 
 
 class PopularityModel(Model):
@@ -75,7 +79,7 @@ class PopularityModel(Model):
 
 		reduced_train_tuple = train_tuple[ ['time', 'itemID', 'action' ] ] # remove columns not needed for training the model
 
-		if self.item_popularity_list is None:
+		if self.item_popularity_list is None:  # Model is given its first tuple to be used for training.
 			self.item_popularity_list = pd.DataFrame([[ str(reduced_train_tuple['time']) , reduced_train_tuple['itemID'],  str(reduced_train_tuple['action'])  ]], columns = ['time', 'itemID', 'action'] )
 			
 			self.item_popularity_list['interaction_count'] = 1
@@ -166,6 +170,6 @@ class PopularityModel(Model):
 		self.item_popularity_list['popularity_score'] = self.item_popularity_list.apply(func = self.compute_popularity_score, axis=1 )
 		self.item_popularity_list = self.item_popularity_list.sort_values('popularity_score', ascending=False)
 
-		return self.item_popularity_list.head(self.n)
+		return self.item_popularity_list.head(self.n).copy()
 
 

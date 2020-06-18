@@ -3,6 +3,7 @@ import random
 import numpy as np
 import pandas as pd
 
+random.seed(10)
 
 class Dataset:
 
@@ -19,6 +20,7 @@ class Dataset:
 		self.curr_pointer = 0 
 
 
+	# Abstract method
 	def getNextTuple(self):
 
 		"""
@@ -27,7 +29,8 @@ class Dataset:
 		Return a tuple of the following format: <time, userID, itemID, action, train_test_label>
 		"""
 
-		pass
+		raise NotImplementedError("Please override and implement the 'getNextTuple(self)' method in your dataset object")
+
 
 
 

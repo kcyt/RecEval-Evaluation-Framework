@@ -35,7 +35,7 @@ class Evaluator:
 		param 'recommendation_df': is a Dataframe of length n, where each row represents a recommended item. 
 									 The 1st row should be the top item that the model would like to recommend.
 		param 'test_tuple': is the tuple given to the model for testing purpose.
-							Has format of a tuple: <time, userID, itemID, action, train_test_label>
+							Has format of a tuple: <time, userID, itemID, action, data_split_label>
 
 		"""
 		if recommendation_df is None: # no recommendation given due to the first tuple given to model being a test tuple
@@ -136,7 +136,7 @@ class Evaluator:
 
 		return dcg_ranking / dcg_ideal
 
-	def evaluateModel( self, dataset, model, num_of_tuples_to_use = 100):
+	def evaluateModel( self, dataset, model, num_of_tuples_to_use = 100, use_cross_validate = True):
 
 		"""
 
@@ -144,6 +144,10 @@ class Evaluator:
 
 		param 'dataset' must be a subclass of Dataset and implement the abstract methods
 		param 'model' must be a subclass of Model and implment the abstract methods
+		param 'use_cross_validate' determines whether to use cross validation (train on train set and not validation set); or not (train on both train and validation sets)
+
+		Return 'self.scores_list' which contains the evaluation results of the model.
+		type: a list of dicts
 
 		"""
 
@@ -152,6 +156,17 @@ class Evaluator:
 
 		if not isinstance(model, Model):
 			raise ValueError('Your model needs to be a subclass of Model and implements the abstract methods.')
+
+
+
+		STOPPED HERE - To do: how to evaluate valid, test separately!? """
+		if use_cross_validate:
+			sets_for_training = ['Train']
+			sets_for_testing = ['Valid']
+		else: 
+			sets_for_training = ['Train', 'Valid']
+			sets_for_testing = ['Test']
+		"""
 
 
 		"""
@@ -163,9 +178,9 @@ class Evaluator:
 
 		for iteration_no in range(num_of_tuples_to_use):
 			tuple = dataset.getNextTuple()
-			if tuple['train_test_label'] == 'Train':
+			if tuple['data_split_label'] == 'Train':
 				model.update_model(tuple)
-			elif tuple['train_test_label'] == 'Test':
+			elif tuple['data_split_label'] == 'Test':
 				list_of_recommendations = model.test_model(tuple['userID'])
 				self.evaluateList(list_of_recommendations, tuple)
 
@@ -174,6 +189,7 @@ class Evaluator:
 				raise NotImplementedError
 
 		self.print_results()
+		return self.scores_list # return the evaluation results of the model
 
 
 

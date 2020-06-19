@@ -17,7 +17,7 @@ class Model:
 	def update_model(self, train_tuple):
 		"""
 		param 'train_tuple': is the tuple given to the model for training purpose.
-							 format of a tuple: <time, userID, itemID, action, train_test_label>
+							 format of a tuple: <time, userID, itemID, action, data_split_label>
 
 		Train/Fine-tune the model given 1 train tuple
 

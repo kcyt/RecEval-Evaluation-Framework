@@ -1,38 +1,51 @@
 import os
 import random
+import enum
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold
 
 seed = 10
 random.seed(seed)
 
 class Dataset:
 
-	# the __init__ function must be called by the Subclass's own '__init__' function.
-	def __init__(self, test_data_proportion = 0.2, kfold_num_splits = 5 ):
+	# an abstract inner class that must be inherited by an inner class inside a Subclass of Dataset. 
+	class Action (enum.Enum) :
+		"""
+		class Action is a Enum class that should contain all the possible actions between an user and an item.
+		
+		e.g. of a sample code:
+		LIKE = 1
+		BOOKMARK = 2
+		COMMENT = 3
+		SHARE = 4
 
 		"""
-		Attribute 'self.test_data_proportion': set the proportion of dataset to be used as test data. 
-									 E.g. 0.2 means 20% of data is used as test set. 
-		type: float/double in the interval (0,1)
+		pass
+		
+
+
+	# the __init__ function must be called by the Subclass's own '__init__' function.
+	def __init__(self, partition_ratios = [0.4, 0.2, 0.4]):
+
+		"""
+		Attribute 'self.partition_ratios' is a list containing 3 float/double elements indicating the 
+		proportion of the dataset to be in training, validation, and testing sets represectively.
+		type: list of floats/doubles
 
 		Attribute 'self.curr_pointer' shows the index of the next tuple to be retrieved 
 		type: int
 
-		Attribute 'self.kfold_num_splits': number of k-folds to use. If set to 0 or 1, then kfold will not be used.
-		type: int
-
-		Attribute 'self.time_arranged_interactions_df' is a dataframe containing user-item interactions where each row is a tuple of the following format: <time, userID, itemID, action, k_fold_1, ... , k_fold_last , data_split_label>
+		Attribute 'self.time_arranged_interactions_df' is a dataframe containing user-item interactions where each row is a tuple of the following format: <time, userID, itemID, action, data_split_label>
+		type: pd.DataFrame
 
 		"""
+		if np.sum(partition_ratios) != 1.0 :
+			raise ValueError("partition_ratios does not add up to 1!")
 
-		self.test_data_proportion = test_data_proportion
+		self.partition_ratios = partition_ratios
 		self.curr_pointer = 0 
-		self.kfold_num_splits = kfold_num_splits
-
-		# the following attributes must be set by the Subclass.
-		self.time_arranged_interactions_df = None # must be set in order to use the self.switch_k_fold() function
+		self.time_arranged_interactions_df = None 
 
 
 	# Abstract method
@@ -41,7 +54,8 @@ class Dataset:
 		"""
 		This method must be implemented by a subclass.
 
-		Return a tuple of the following format: <time, userID, itemID, action, k_fold_1, ... , k_fold_last , data_split_label>
+		Return a tuple of the following format: <time, userID, itemID, action, data_split_label>
+
 		Return type: pd.Series object
 		"""
 
@@ -49,66 +63,48 @@ class Dataset:
 
 
 	# helper method to split a time ordered df into training set, validation set, and test set
-	def split_dataset(self, time_ordered_df):
+	def split_dataset(self, time_ordered_df ):
 
 		"""
-		Split a dataset into training set, validation set, and test set by giving data split labels to each data sample
-		Note that when a data split label will be either 'Train', 'Valid' or 'Test', and it means the data sample is in training set, validation set, or test set respectively.
-
 		param 'time_ordered_df': a df containing all the data samples that are ordered by time (i.e. earliest sample take index 0)
 		type: pd.DataFrame object
 
+
+		Split a dataset into training set, validation set, and test set by giving data split labels to each data sample
+		Note that when a data split label will be either 'Train', 'Valid' or 'Test', and it means the data sample is in training set, validation set, or test set respectively.
 		Return a time ordered df that has an additional column 'data_split_label', which specifies whether the sample is in train, validation, or test set.
-		If K-fold is used, then create additional columns for each fold as well.
+
 		Return type: pd.DataFrame object
 		"""
 
+
+		train_data_proportion = self.partition_ratios[0]
+		train_and_validation_data_proportion = train_data_proportion + self.partition_ratios[1]
+
+
 		# Generate the labels to indicate whether each tuple/row in df is a train, validation, or test tuple.
 		num_of_obs = time_ordered_df.shape[0]
-		test_size = round(self.test_data_proportion * num_of_obs)
-		test_indices = random.sample( range(num_of_obs) ,test_size)
-		test_bool_indices = np.isin(np.arange(num_of_obs), test_indices)
-		non_test_indices = np.array( list( set(range(num_of_obs)) - set(test_indices) ) )
+		train_size = round(train_data_proportion * num_of_obs)
+		train_and_validation_size = round(train_and_validation_data_proportion * num_of_obs)
 
-		# KFold is used to split non-test samples into train and validation sets
-		num_split = self.kfold_num_splits if self.kfold_num_splits > 1 else 2 # If user wants to do train-validation split without using K-fold, then 2-Fold split is still carried out and the 1st fold is used as the train-validation set.
-		kf = KFold(n_splits = num_split , shuffle = True, random_state = seed )
 
+		data_split_boolean_labels = np.repeat(False, repeats = num_of_obs)
+		train_boolean_labels = data_split_boolean_labels.copy()
+		train_boolean_labels[:train_size] = True
+		validation_boolean_labels = data_split_boolean_labels.copy()
+		validation_boolean_labels[train_size:train_and_validation_size] = True
+		test_boolean_labels = data_split_boolean_labels.copy()
+		test_boolean_labels[train_and_validation_size:] = True
+		
 		data_split_labels = np.repeat('Train', repeats = num_of_obs) # temporarily set all samples to have the 'Train' label
-		data_split_labels[test_bool_indices] = 'Test' 
-
-		# for each K-fold, create a column in the time_ordered_df containing labels indicating whether the row is in train,validation, or test set.
-		for k_fold_index , (train_index, validation_index) in enumerate(kf.split(non_test_indices) , 1 ) :
-			current_data_split_labels = data_split_labels.copy()
-
-			actual_validation_index = non_test_indices[validation_index] # actual_validation_index is the actual indices of the time_ordered_df
-			actual_validation_bool_indices = np.isin(np.arange(num_of_obs), actual_validation_index)
-			current_data_split_labels[actual_validation_bool_indices] = 'Valid'
-
-			k_fold_column_name = 'k_fold_' + str(k_fold_index)
-			time_ordered_df[k_fold_column_name] = current_data_split_labels
-
-		# set the current train-validation sets to be the 1st K-fold
-		time_ordered_df['data_split_label'] = time_ordered_df['k_fold_1'] 
+		data_split_labels[validation_boolean_labels] = 'Valid'
+		data_split_labels[test_boolean_labels] = 'Test'
+	
+		time_ordered_df['data_split_label'] = data_split_labels
 
 		return time_ordered_df
 
 
-
-	# helper method to switch the training-validation sets into another K-fold.
-	def switch_k_fold(self, k_fold_index):
-		"""
-		Required: The attribute 'self.time_arranged_interactions_df' must be already set.
-
-		Use another K-fold by switching the 'data_split_label' column inside 'self.time_arranged_interactions_df' with another 'k_fold' column
-
-		param 'k_fold_index': indicates which of the k folds to use.
-		type: int
-
-
-		"""
-		k_fold_column_name = 'k_fold_' + str(k_fold_index)
-		self.time_arranged_interactions_df['data_split_label'] = self.time_arranged_interactions_df[k_fold_column_name] 
 
 
 
@@ -118,9 +114,22 @@ class Dataset:
 
 class Deskdrop_Dataset(Dataset):
 
-	def __init__(self, test_data_proportion = 0.2, kfold_num_splits = 5, folder_path= 'CI&T_Deskdrop_dataset' ):
+	# implementing an abstract inner class from Parent class 'Action'
+	class Action (Dataset.Action) :
+		"""
+		class Action is a Enum class that should contain all the possible actions between an user and an item.
+		"""
+		VIEW = 1
+		LIKE = 2 
+		BOOKMARK = 3 
+		FOLLOW = 4
+		COMMENT = 5  
 
-		super().__init__(test_data_proportion = test_data_proportion, kfold_num_splits = kfold_num_splits)
+
+
+	def __init__(self, partition_ratios=[0.4, 0.2, 0.4] ,folder_path= 'CI&T_Deskdrop_dataset' ):
+
+		super().__init__(partition_ratios = partition_ratios)
 
 		shared_articles_filepath =  os.path.join(folder_path, 'shared_articles.csv')
 		users_interactions_filepath = os.path.join(folder_path, 'users_interactions.csv')
@@ -129,14 +138,23 @@ class Deskdrop_Dataset(Dataset):
 		self.interactions_df = pd.read_csv(users_interactions_filepath,low_memory=False)
 		self.time_arranged_interactions_df = self.process_time_arranged_df(self.interactions_df)
 
+		# convert the 'action' column in 'self.time_arranged_interactions_df' from str type into our defined enum type:
+		self.Action.str_to_enum_dict = {'VIEW': self.Action.VIEW, 'LIKE': self.Action.LIKE, 
+										'BOOKMARK': self.Action.BOOKMARK, 'FOLLOW': self.Action.FOLLOW, 
+										'COMMENT CREATED': self.Action.COMMENT,  }
+		self.time_arranged_interactions_df['action'] = self.time_arranged_interactions_df['action'].apply(lambda x: self.Action.str_to_enum_dict[x] ) 
+
 
 	def process_time_arranged_df(self, df ):
 		"""
-		Given an user-item interaction df, remove unnecessary columns, do renaming, 
-		sort according to timestamp, and generate train/test labels for the tuples. 
-
 		param 'df': the user-item interaction dataframe
-		Return a time-arranged df
+		type: pd.DataFrame
+
+		Given an user-item interaction df, remove unnecessary columns, do renaming, 
+		sort according to timestamp, and generate train/validation/test labels for the tuples. 
+		Return a time-arranged df.
+
+		Return type: pd.DataFrame
 		
 		"""
 
@@ -154,7 +172,7 @@ class Deskdrop_Dataset(Dataset):
 
 	def getNextTuple(self):
 		"""
-		Return a tuple <time, userID, itemID, action, k_fold_1, ... , k_fold_last , data_split_label> that could either be a test or train tuple. 
+		Return a tuple <time, userID, itemID, action, data_split_label> that could either be a test, validation, or train tuple. 
 		
 		"""
 

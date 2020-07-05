@@ -9,8 +9,13 @@ class Evaluator:
 		"""
 		Attribute 'self.n_ranks': For defining the metrics e.g. if n_ranks = [1,5], and the metrics used is RECALL, 
 								  then RECALL@1 and RECALL@5 will be used
+		type: list
+
 		Attribute 'self.scores_list': Accumulate/Collect the scores of each of the metrics
+		type: list of dicts
+
 		Attribute 'self.count_tuples_tested_on': The total number of tuples that the model has been tested on.
+		type: int
 
 		"""
 
@@ -30,12 +35,17 @@ class Evaluator:
 
 	def evaluateList(self, recommendation_df, test_tuple):
 		"""
-		evaluate the recommendations given by a model
-
 		param 'recommendation_df': is a Dataframe of length n, where each row represents a recommended item. 
 									 The 1st row should be the top item that the model would like to recommend.
+		type: pd.DataFrame
+
 		param 'test_tuple': is the tuple given to the model for testing purpose.
 							Has format of a tuple: <time, userID, itemID, action, data_split_label>
+		type: pd.Series
+
+		Evaluate the recommendations given by a model.
+
+		No return object.
 
 		"""
 		if recommendation_df is None: # no recommendation given due to the first tuple given to model being a test tuple
@@ -64,6 +74,13 @@ class Evaluator:
 		
 
 	def print_results(self):
+		"""
+
+		print the evaluation metrics scores.
+
+		No return object.
+
+		"""
 		
 		print("Printing results after testing on ", self.count_tuples_tested_on ," tuples")
 
@@ -74,23 +91,30 @@ class Evaluator:
 
 	def precision_at_k(self, binary_hit_ranked_list, k):
 		"""
-		compute the precision @ k
 
 		param 'binary_hit_ranked_list':  A numpy array whose index that indicates whether there is a hit in that position or not.
-		param 'k': to compute precision @ k 
+		type: np.array 
 
-		return precision @ k score
+		param 'k': to compute precision @ k 
+		type: int
+
+		Compute and return the precision @ k score
+
+		return type: float/double
 
 		"""
 		return np.mean(binary_hit_ranked_list[:k])
 
 	def average_precision(self, binary_hit_ranked_list):
 		"""
-		compute the average_precision, will award higher scores to recommendation lists that put the hit item at a higher position.
 
 		param 'binary_hit_ranked_list':  A numpy array whose index that indicates whether there is a hit in that position or not.
+		type: np.array 
 
-		return average_precision score
+		Compute and return the average_precision
+		Note: this function will award higher scores to recommendation lists that put the hit item at a higher position.
+
+		return type: float/double
 
 		"""
 		if np.sum(binary_hit_ranked_list) == 0: # there is no hit in the binary_hit_ranked_list
@@ -101,15 +125,19 @@ class Evaluator:
 
 	def recall_at_k(self, binary_hit_ranked_list, num_of_actual_true_labels = 1):
 		"""
-		compute the recall @ k 
 
 		param 'binary_hit_ranked_list':  A numpy array whose index that indicates whether there is a hit in that position or not.
 		Note: The value of k is implied by the length of binary_hit_ranked_list
+		type: np.array 
+		
 		param 'num_of_actual_true_labels': The number of True Positives + False Negatives 
 													   Value is defaulted to 1 because model is given 1 test tuple at a time.
+		type: int
 
-		return recall @ k score 
+		Compute and return the recall @ k score 
 		Note: The return value is basically either 0 or 1.
+
+		return type: float/double
 
 		"""
 
@@ -122,8 +150,12 @@ class Evaluator:
 		The gain/relevance score is binary i.e. either 0 or 1
 
 		param 'binary_hit_ranked_list':  A numpy array whose index that indicates whether there is a hit in that position or not.
+		type: np.array 
 
-		return: ndcg @ k score
+		Compute the normalized discounted cumulative gain (ndcg) @ k. Return the ndcg @ k score.
+		The gain/relevance score is binary i.e. either 0 or 1. 
+
+		return type: float/double
 
 		"""
 		if np.sum(binary_hit_ranked_list) == 0: # there is no hit in the binary_hit_ranked_list
@@ -140,33 +172,29 @@ class Evaluator:
 
 		"""
 
-		Evaluate the given model and print the evaluation results.
-
 		param 'dataset' must be a subclass of Dataset and implement the abstract methods
-		param 'model' must be a subclass of Model and implment the abstract methods
-		param 'use_cross_validate' determines whether to use cross validation (train on train set and not validation set); or not (train on both train and validation sets)
+		type: Dataset or its subclass
 
-		Return 'self.scores_list' which contains the evaluation results of the model.
-		type: a list of dicts
+		param 'model' must be a subclass of Model and implement the abstract methods
+		type: Model or its subclass
+
+		param 'num_of_tuples_to_use' determines the number of tuples (user-item interactions) to be used for training and testing the model.
+		type: int
+
+		Evaluate the given model and print the evaluation results. Also return 'self.scores_list' (a list of dicts) which contains the evaluation results of the model.
+		
+		return type: a list of dicts
 
 		"""
 
 		if not isinstance(dataset, Dataset):
 			raise ValueError('Your dataset object needs to be a subclass of Dataset and implements the abstract methods.')
 
+		if not (dataset.time_arranged_interactions_df['action'].apply(lambda x: isinstance(x, Dataset.Action) ).all() ):
+			raise ValueError('The values inside the "action" column in your "dataset.time_arranged_interactions_df" is not of the "Dataset.Action" type. Please refer to "dataset.py". ')
+
 		if not isinstance(model, Model):
 			raise ValueError('Your model needs to be a subclass of Model and implements the abstract methods.')
-
-
-
-		STOPPED HERE - To do: how to evaluate valid, test separately!? """
-		if use_cross_validate:
-			sets_for_training = ['Train']
-			sets_for_testing = ['Valid']
-		else: 
-			sets_for_training = ['Train', 'Valid']
-			sets_for_testing = ['Test']
-		"""
 
 
 		"""

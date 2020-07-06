@@ -33,6 +33,14 @@ class Dataset:
 		proportion of the dataset to be in training, validation, and testing sets represectively.
 		type: list of floats/doubles
 
+		Attribute 'self.train_size' is the size of the training set
+		Note: This attribute is only set after calling split_dataset(), and this attribute must be set before calling getTraining() and getValidation().
+		type: int 
+
+		Attribute 'self.train_and_validation_size' is the size of the training set and validation set combined.
+		Note: This attribute is only set after calling split_dataset(), and this attribute must be set before calling getValidation().
+		type: int 
+
 		Attribute 'self.curr_pointer' shows the index of the next tuple to be retrieved 
 		type: int
 
@@ -44,6 +52,8 @@ class Dataset:
 			raise ValueError("partition_ratios does not add up to 1!")
 
 		self.partition_ratios = partition_ratios
+		self.train_size = None 
+		self.train_and_validation_size = None
 		self.curr_pointer = 0 
 		self.time_arranged_interactions_df = None 
 
@@ -62,6 +72,7 @@ class Dataset:
 		raise NotImplementedError("Please override and implement the 'getNextTuple(self)' method in your dataset object")
 
 
+
 	# helper method to split a time ordered df into training set, validation set, and test set
 	def split_dataset(self, time_ordered_df ):
 
@@ -73,6 +84,7 @@ class Dataset:
 		Split a dataset into training set, validation set, and test set by giving data split labels to each data sample
 		Note that when a data split label will be either 'Train', 'Valid' or 'Test', and it means the data sample is in training set, validation set, or test set respectively.
 		Return a time ordered df that has an additional column 'data_split_label', which specifies whether the sample is in train, validation, or test set.
+		This function will also set self.train_size and self.train_and_validation_size, which are both int type and indicate the size of training set and the size of training + validation set respectively
 
 		Return type: pd.DataFrame object
 		"""
@@ -84,17 +96,17 @@ class Dataset:
 
 		# Generate the labels to indicate whether each tuple/row in df is a train, validation, or test tuple.
 		num_of_obs = time_ordered_df.shape[0]
-		train_size = round(train_data_proportion * num_of_obs)
-		train_and_validation_size = round(train_and_validation_data_proportion * num_of_obs)
+		self.train_size = round(train_data_proportion * num_of_obs)
+		self.train_and_validation_size = round(train_and_validation_data_proportion * num_of_obs)
 
 
 		data_split_boolean_labels = np.repeat(False, repeats = num_of_obs)
 		train_boolean_labels = data_split_boolean_labels.copy()
-		train_boolean_labels[:train_size] = True
+		train_boolean_labels[:self.train_size] = True
 		validation_boolean_labels = data_split_boolean_labels.copy()
-		validation_boolean_labels[train_size:train_and_validation_size] = True
+		validation_boolean_labels[self.train_size:self.train_and_validation_size] = True
 		test_boolean_labels = data_split_boolean_labels.copy()
-		test_boolean_labels[train_and_validation_size:] = True
+		test_boolean_labels[self.train_and_validation_size:] = True
 		
 		data_split_labels = np.repeat('Train', repeats = num_of_obs) # temporarily set all samples to have the 'Train' label
 		data_split_labels[validation_boolean_labels] = 'Valid'
@@ -105,6 +117,31 @@ class Dataset:
 		return time_ordered_df
 
 
+	def getTraining(self):
+
+		"""
+
+		Return the Training Set from the overall Dataset.
+		Note: This function requires the use of self.train_size, which is set only after calling the split_dataset() function. 
+		To use getTraining(), instead of calling split_dataset(), it is just as appropriate to simply set self.train_size manually.
+
+		return type: pd.DataFrame
+
+		"""
+		return self.time_arranged_interactions_df.iloc[:self.train_size ,:]
+
+		
+
+	def getValidation(self):
+		"""
+
+		Return the Validation Set from the overall Dataset.
+		Note: This function requires the use of self.train_size and self.train_and_validation_size, which are set only after calling the split_dataset() function. 
+		To use getValidation(), instead of calling split_dataset(), it is just as appropriate to simply set self.train_size and self.train_and_validation_size manually.
+
+		return type: pd.DataFrame
+		"""
+		return self.time_arranged_interactions_df.iloc[self.train_size:self.train_and_validation_size ,:]
 
 
 
@@ -162,6 +199,7 @@ class Deskdrop_Dataset(Dataset):
 		df = df[ ['timestamp', 'personId', 'contentId', 'eventType'] ]
 		df = df.rename(columns={'timestamp':'time', 'personId':'userID', 'contentId':'itemID', 'eventType': 'action' } )
 		df = df.sort_values('time', ascending=True)
+		df.reset_index(drop=True, inplace=True)
 
 
 		# split the df into train,validation, and test sets, and then return the resulting df.

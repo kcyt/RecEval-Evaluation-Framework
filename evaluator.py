@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from dataset import Dataset
 from model import Model
 
@@ -12,6 +13,9 @@ class Evaluator:
 		type: list
 
 		Attribute 'self.scores_list': Accumulate/Collect the scores of each of the metrics
+		type: list of dicts
+
+		Attribute 'self.validation_scores_list': Same purpose as self.scores_list, but used for validation instead of testing.
 		type: list of dicts
 
 		Attribute 'self.count_tuples_tested_on': The total number of tuples that the model has been tested on.
@@ -28,6 +32,7 @@ class Evaluator:
 							'RECALL@'+str(n): 0, 
 							'NDCG@'+str(n): 0, }
 			self.scores_list.append(metrics_dict)
+		self.validation_scores_list = self.scores_list.copy()
 
 		self.count_tuples_tested_on = 0
 
@@ -48,8 +53,9 @@ class Evaluator:
 		No return object.
 
 		"""
-		if recommendation_df is None: # no recommendation given due to the first tuple given to model being a test tuple
-			return
+		if recommendation_df is None: 
+			raise ValueError("recommendation_df given to evaluateList() is empty!")
+			
 
 		self.count_tuples_tested_on += 1
 
@@ -164,9 +170,76 @@ class Evaluator:
 		ideal_order_list = np.asfarray(sorted(binary_hit_ranked_list, reverse=True))
 
 		dcg_ideal = np.sum(ideal_order_list / np.log2(np.arange(2, ideal_order_list.size + 2))) 
-		dcg_ranking = np.sum(binary_hit_ranked_list / np.log2(np.arange(2, binary_hit_ranked_list.size + 2)))  #
+		dcg_ranking = np.sum(binary_hit_ranked_list / np.log2(np.arange(2, binary_hit_ranked_list.size + 2)))  
 
 		return dcg_ranking / dcg_ideal
+
+	def evaluate_Validation_Recommendations(self, recommendation_df, validation_set_df ):
+
+		"""
+		param 'recommendation_df': A dataframe containing the recommendations for each user. 
+		The dataframe will have 3 columns: 1. 'userID' 2. 'itemID_list', and 3.'action_list'
+		The 'itemID_list' column contains a list of recommended itemID for each user.
+		The 'action_list' column contains a list of recommended action for each user. Each action must be an enum defined in a subclass of dataset.Action 
+		
+		param 'validation_set_df': A dataframe containing the validation tuples from the dataset.
+
+		No return object.
+
+		"""
+
+		user_grouped_validation_set_df = validation_set_df.groupby('userID')['itemID'].apply(list).reset_index()
+		user_grouped_validation_set_df.rename(columns = {'itemID':'actual_itemID_list'} ,inplace=True)
+		user_grouped_validation_set_df['actual_action_list'] = validation_set_df.groupby('userID')['action'].apply(list)
+
+		# left outer join to merge 'user_grouped_validation_set_df' and 'recommendation_df'
+		merged_user_grouped_df = user_grouped_validation_set_df.merge(recommendation_df, 
+               how = 'left',  
+               left_on = 'userID',     
+               right_on = 'userID')  
+
+		max_n = np.max(self.n_ranks)
+
+		# define an inner function to compute binary_hit_ranked_list 
+		def compute_max_binary_hit_ranked_list(row):
+			predicted_itemID_list = row['itemID_list']
+			predicted_itemID_list = predicted_itemID_list[:max_n]
+			actual_itemID_list = row['actual_itemID_list']
+			intersected_itemIDs = list(set(predicted_itemID_list).intersection(set(actual_itemID_list) ) )
+			max_binary_hit_ranked_list = np.zeros(max_n)
+			for itemID in intersected_itemIDs:
+				max_binary_hit_ranked_list[ predicted_itemID_list.index(itemID)] = 1
+			return max_binary_hit_ranked_list
+
+		merged_user_grouped_df['max_binary_hit_ranked_list'] = merged_user_grouped_df.apply(func=compute_max_binary_hit_ranked_list , axis = 1)
+
+		# define an inner function to compute overall_recall_at_k_score
+		def compute_overall_recall_at_k_score(row):
+			binary_hit_ranked_list = row['current_binary_hit_ranked_list']
+			num_of_actual_true_labels = len(row['actual_itemID_list'])
+			return np.sum(binary_hit_ranked_list)/ num_of_actual_true_labels
+
+
+		for i,n in enumerate(self.n_ranks):
+			merged_user_grouped_df['current_binary_hit_ranked_list'] = merged_user_grouped_df['max_binary_hit_ranked_list'].apply(lambda x: x[:n])
+			overall_precision_at_k_score =  merged_user_grouped_df['current_binary_hit_ranked_list'].apply(func = self.precision_at_k, args=(n,)).mean()
+			overall_average_precision_score = merged_user_grouped_df['current_binary_hit_ranked_list'].apply(func = self.average_precision).mean()
+			overall_recall_at_k_score = merged_user_grouped_df.apply(func=compute_overall_recall_at_k_score, axis=1 ).mean()   
+			overall_ndcg_at_k_score = merged_user_grouped_df['current_binary_hit_ranked_list'].apply(func = self.ndcg_at_k).mean() 
+
+
+			self.validation_scores_list[i]['PREC@'+str(n)] = overall_precision_at_k_score
+			self.validation_scores_list[i]['MAP@'+str(n)] = overall_average_precision_score
+			self.validation_scores_list[i]['RECALL@'+str(n)] = overall_recall_at_k_score
+			self.validation_scores_list[i]['NDCG@'+str(n)] = overall_ndcg_at_k_score
+
+			print('PREC@'+str(n)+': ', overall_precision_at_k_score)
+			print('MAP@'+str(n)+': ', overall_average_precision_score)
+			print('RECALL@'+str(n)+': ', overall_recall_at_k_score)
+			print('NDCG@'+str(n)+': ', overall_ndcg_at_k_score)
+
+		
+
 
 	def evaluateModel( self, dataset, model, num_of_tuples_to_use = 100, use_cross_validate = True):
 

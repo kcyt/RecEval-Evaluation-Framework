@@ -10,14 +10,23 @@ and your model object must be a subclass of Model defined in model.py and implem
 
 
 # tunable parameters
-num_of_tuples_to_use = 1000 # number of tuples (user-item interactions) to be used for training and testing the model.
 num_of_recommendations = 5 # number of recommendations to be given by the model.
 n_ranks=[1, 3, 5] # For defining the metrics e.g. if n_ranks = [1,5], and the metrics used is RECALL, then RECALL@1 and RECALL@5 will be used
 
 # initialising the objects
-deskdrop_dataset = Deskdrop_Dataset(test_data_proportion = 0.2, folder_path= 'CI&T_Deskdrop_dataset') 
+deskdrop_dataset = Deskdrop_Dataset(partition_ratios = [0.4, 0.2, 0.4], folder_path= 'CI&T_Deskdrop_dataset') 
 popularity_model = PopularityModel(n=num_of_recommendations, popularity_metric = "simple interaction count")
 evaluator = Evaluator(n_ranks=n_ranks)
 
+# do Training 
+training_set = deskdrop_dataset.getTraining()
+popularity_model.train_in_batch(training_set=training_set)
+
+# do Validation
+validation_set = deskdrop_dataset.getValidation()
+recommendation_df = popularity_model.predict_in_batch(validation_set=validation_set)
+validation_results = evaluator.evaluate_Validation_Recommendations(recommendation_df, validation_set )
+
+
 # evaluate your model
-evaluation_results = evaluator.evaluateModel( dataset=deskdrop_dataset, model=popularity_model, num_of_tuples_to_use = num_of_tuples_to_use, use_cross_validate = True)
+evaluation_results = evaluator.evaluateModel( dataset=deskdrop_dataset, model=popularity_model, scheme = [0.1,0.9])

@@ -50,6 +50,47 @@ class Model:
 
 
 
+	# Optional Abstract method (it is equally appropriate to call a custom function that trains the model.)
+	def train_in_batch(self, training_set):
+		"""
+		param 'training_set' is the data samples used for training of the model.
+		type: pd.DataFrame
+
+		To train the model using 'training_set'.
+		
+		No return object.
+
+		"""
+		
+		raise NotImplementedError("The optional train_in_batch() has not been implemented and thus cannot be used.")
+
+
+
+	# Optional Abstract method (required only if validation of the model is needed.)
+	def predict_in_batch(self, validation_set):
+		"""
+		param 'validation_set' is the data samples used for validation of the model.
+		type: pd.DataFrame
+
+		For each user in 'validation_set', predict the top n item recommended by the model.
+		Return a dataframe containing the recommendations for each user. The dataframe adheres to the following format:
+			The dataframe will have 3 columns: 1. 'userID' 2. 'itemID_list', and 3.'action_list'
+			The 'itemID_list' column contains a list of recommended itemID for each user.
+			The 'action_list' column contains a list of recommended action for each user. Each action must be an enum defined in a subclass of dataset.Action 
+		
+		return type: pd.DataFrame
+
+
+		"""
+		
+		raise NotImplementedError("The optional predict_in_batch() has not been implemented and thus cannot be used.")
+
+
+
+
+
+
+
 class PopularityModel(Model):
 
 	def __init__(self, n = 20, popularity_metric = 'IMDB_weighted_rating_formula' ):
@@ -79,13 +120,16 @@ class PopularityModel(Model):
 		super().__init__(n = n)
 
 		self.item_popularity_list = None
+
+		# the self.event_type_strength dict assumes the dataset used is Deskdrop dataset.
 		self.event_type_strength = {
 				'VIEW': 1.0,
 				'LIKE': 2.0, 
 				'BOOKMARK': 2.5, 
 				'FOLLOW': 3.0,
-				'COMMENT CREATED': 4.0,  
+				'COMMENT': 4.0,  
 				} 
+
 		self.overall_avg_event_score = 0
 		self.ninety_percentile_count = 0
 		self.popularity_metric = popularity_metric
@@ -104,10 +148,10 @@ class PopularityModel(Model):
 		reduced_train_tuple = train_tuple[ ['time', 'itemID', 'action' ] ] # remove columns not needed for training the model
 
 		if self.item_popularity_list is None:  # Model is given its first tuple to be used for training.
-			self.item_popularity_list = pd.DataFrame([[ str(reduced_train_tuple['time']) , reduced_train_tuple['itemID'],  str(reduced_train_tuple['action'])  ]], columns = ['time', 'itemID', 'action'] )
+			self.item_popularity_list = pd.DataFrame([[ str(reduced_train_tuple['time']) , reduced_train_tuple['itemID'],  reduced_train_tuple['action'].name  ]], columns = ['time', 'itemID', 'action'] )
 			
 			self.item_popularity_list['interaction_count'] = 1
-			item_average_event_score = self.event_type_strength[ reduced_train_tuple['action'] ]
+			item_average_event_score = self.event_type_strength[ reduced_train_tuple['action'].name ]
 			self.item_popularity_list['average_event_score'] = item_average_event_score
 			self.item_popularity_list['popularity_score'] = 0 # temporarily set as 0, the actual score will be computed during model testing.
 		else:
@@ -122,7 +166,7 @@ class PopularityModel(Model):
 			current_item_tuple = self.item_popularity_list[ item_index ].iloc[0]
 			
 			# compute the updated_average_event_score and updated_interaction_count
-			updated_average_event_score = ( current_item_tuple['interaction_count'] * current_item_tuple['average_event_score'] + self.event_type_strength[ reduced_train_tuple['action'] ] ) / (current_item_tuple['interaction_count'] + 1 )
+			updated_average_event_score = ( current_item_tuple['interaction_count'] * current_item_tuple['average_event_score'] + self.event_type_strength[ reduced_train_tuple['action'].name ] ) / (current_item_tuple['interaction_count'] + 1 )
 			updated_interaction_count = current_item_tuple['interaction_count'] + 1
 
 			# assign the updated_average_event_score
@@ -135,7 +179,7 @@ class PopularityModel(Model):
 			self.item_popularity_list.loc[ item_index, 'time' ] = current_item_tuple['time'] + ' ' + str(reduced_train_tuple['time'])
 
 			# append to the list (stored as a string) of actions for that item
-			self.item_popularity_list.loc[ item_index, 'action' ] = current_item_tuple['action'] + ' ' + str(reduced_train_tuple['action'])
+			self.item_popularity_list.loc[ item_index, 'action' ] = current_item_tuple['action'] + ' ' + reduced_train_tuple['action'].name
 
 
 	def IMDB_weighted_rating_formula(self, row ): 
@@ -203,5 +247,67 @@ class PopularityModel(Model):
 		self.item_popularity_list = self.item_popularity_list.sort_values('popularity_score', ascending=False)
 
 		return self.item_popularity_list.head(self.n).copy()
+
+
+
+	def train_in_batch(self, training_set):
+		"""
+		param 'training_set' is the data samples used for training of the model.
+		type: pd.DataFrame
+
+		To train the model using 'training_set'. This function will compute self.item_popularity_list, which tracks the popular items in the dataset.
+		
+		No return object.
+
+		"""
+
+		time_column = training_set.groupby('itemID')['time'].apply(lambda x: ' '.join(str(i) for i in x) )
+		itemID_column = pd.Series(time_column.index.tolist() )
+		time_column.reset_index(drop=True, inplace=True)
+		interaction_count_column = training_set.groupby('itemID')['time'].count().reset_index(drop=True)
+		action_column = training_set.groupby('itemID')['action'].apply(lambda x: ' '.join(i.name for i in x) ).reset_index(drop=True)
+		average_event_score_column = training_set.groupby('itemID')['action'].apply(lambda x: np.sum( [self.event_type_strength[i.name] for i in x] )/len(x)  ).reset_index(drop=True)
+		self.item_popularity_list = pd.concat( [time_column, itemID_column, action_column, interaction_count_column, average_event_score_column  ], axis = 1, ignore_index= True ).rename(columns = {0:'time', 1:'itemID', 2:'action', 3:'interaction_count', 4:'average_event_score'} )
+
+
+		# compute the self.overall_avg_event_score and self.ninety_percentile_count as their values are needed to compute popularity score if 'IMDB_weighted_rating_formula' is used. 
+		self.overall_avg_event_score = self.item_popularity_list['average_event_score'].mean() 
+		self.ninety_percentile_count = self.item_popularity_list['interaction_count'].quantile(0.90)
+
+		# Compute popularity score of each item and return top n most popular items.
+		self.item_popularity_list['popularity_score'] = self.item_popularity_list.apply(func = self.compute_popularity_score, axis=1 )
+		self.item_popularity_list = self.item_popularity_list.sort_values('popularity_score', ascending=False)
+
+
+
+	def predict_in_batch(self, validation_set):
+		"""
+		param 'validation_set' is the data samples used for validation of the model.
+		type: pd.DataFrame
+
+		For each user in 'validation_set', predict the top n item recommended by the model.
+		Return a dataframe containing the recommendations for each user. The dataframe adheres to the following format:
+			The dataframe will have 3 columns: 1. 'userID' 2. 'itemID_list', and 3.'action_list'
+			The 'itemID_list' column contains a list of recommended itemID for each user.
+			The 'action_list' column contains a list of recommended action for each user. Each action must be an enum defined in a subclass of dataset.Action 
+		
+		return type: pd.DataFrame
+
+
+		"""
+
+		userID_list = validation_set['userID'].unique()
+		recommendation_df = pd.DataFrame(userID_list, columns=['userID'])
+
+		top_n_recommended_items = self.item_popularity_list.head(self.n).copy()
+		top_n_recommended_items_string = " ".join( [str(itemID) for itemID in top_n_recommended_items['itemID'] ] ) # Note that the top n recommended items are stored as a string instead of a list.
+		recommendation_df['itemID_list'] = top_n_recommended_items_string # each user will be recommended the same n items.
+		recommendation_df['itemID_list'] = recommendation_df['itemID_list'].apply(lambda x: list(map( int , x.split(' ') )) )
+		recommendation_df['action_list'] = None	 # no value is needed to be given to action_list if prediction of action is not required.
+
+		return recommendation_df
+
+
+
 
 

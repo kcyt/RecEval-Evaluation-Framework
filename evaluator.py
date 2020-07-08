@@ -181,10 +181,15 @@ class Evaluator:
 		The dataframe will have 3 columns: 1. 'userID' 2. 'itemID_list', and 3.'action_list'
 		The 'itemID_list' column contains a list of recommended itemID for each user.
 		The 'action_list' column contains a list of recommended action for each user. Each action must be an enum defined in a subclass of dataset.Action 
-		
-		param 'validation_set_df': A dataframe containing the validation tuples from the dataset.
+		type: pd.DataFrame
 
-		No return object.
+		param 'validation_set_df': A dataframe containing the validation tuples from the dataset.
+		type: pd.DataFrame
+
+		Evaluate the model using the Validation set and print out the scores. 
+		This function returns self.validation_scores_list (a list of dicts) containing the scores.
+
+		return type: a list of dicts.
 
 		"""
 
@@ -238,10 +243,12 @@ class Evaluator:
 			print('RECALL@'+str(n)+': ', overall_recall_at_k_score)
 			print('NDCG@'+str(n)+': ', overall_ndcg_at_k_score)
 
+		return self.validation_scores_list
+
 		
 
 
-	def evaluateModel( self, dataset, model, num_of_tuples_to_use = 100, use_cross_validate = True):
+	def evaluateModel( self, dataset, model, scheme = [0.1,0.9]):
 
 		"""
 
@@ -251,10 +258,13 @@ class Evaluator:
 		param 'model' must be a subclass of Model and implement the abstract methods
 		type: Model or its subclass
 
-		param 'num_of_tuples_to_use' determines the number of tuples (user-item interactions) to be used for training and testing the model.
-		type: int
+		param 'scheme' determines the proportion of the test set to be used for as train tuples and test tuples during prequential evaluation. 
+		E.g. [0.1, 0.9] will mean the chronological first 10% of each user's interaction will be labelled as train tuples, and the remaining 90% will be labelled as test tuples.
+		'scheme' can also be the string 'LOO', which indicates Leave One Out and that only each user's last interaction will be labelled as test tuple, all other tuples are train tuples.
+		type: list containing two floats/doubles/ints or a string
 
-		Evaluate the given model and print the evaluation results. Also return 'self.scores_list' (a list of dicts) which contains the evaluation results of the model.
+		Evaluate the given model using Prequential Evaluation and the given 'scheme', and then print the evaluation results. 
+		Also return 'self.scores_list' (a list of dicts) which contains the evaluation results of the model.
 		
 		return type: a list of dicts
 
@@ -270,6 +280,48 @@ class Evaluator:
 			raise ValueError('Your model needs to be a subclass of Model and implements the abstract methods.')
 
 
+		if type(scheme) == list:
+			if (np.sum(scheme) != 1.0) and (len(scheme)== 2 ) :
+				raise ValueError("The ratios indicated in 'scheme' does not add up to 1.")
+		elif type(scheme) == str:
+			if scheme != 'LOO':
+				raise ValueError("'scheme' is an invalid string.")
+		else: 
+			raise ValueError("'scheme' is of an invalid type.")
+
+
+
+		test_set_df = dataset.getTesting()
+		test_set_df.reset_index(inplace=True)
+		test_set_df['index'] = test_set_df.index
+
+		if type(scheme) == list:
+			train_proportion = scheme[0]
+
+			# split the tuples in Testing Set into Train tuples and Test tuples according to the 'scheme' specified.
+			train_tuple_indices = test_set_df.groupby('userID').apply(lambda x: x.iloc[: round(len(x)*train_proportion) ])['index'].reset_index(drop=True)
+			
+			test_set_df['data_split_label'] = 'TestTuple' # temporarily label all tuples in the Test Set to be Test Tuples.
+			test_set_df['data_split_label'].iloc[train_tuple_indices] = 'TrainTuple'
+
+		elif type(scheme) == str:
+			if scheme == 'LOO':
+				# split the tuples in Testing Set into Train tuples and Test tuples according to the Leave-One-Out scheme
+				test_tuple_indices = test_set_df.groupby('userID').apply(lambda x: x.iloc[-1])['index'].reset_index(drop=True)
+
+				test_set_df['data_split_label'] = 'TrainTuple' # temporarily label all tuples in the Test Set to be Train Tuples.
+				test_set_df['data_split_label'].iloc[test_tuple_indices] = 'TestTuple'
+			else:
+				raise NotImplementedError
+
+		else:
+			raise NotImplementedError
+
+
+		# update the data split labels in the original dataset (rather than a copy of the dataset)
+		dataset.updateTupleLabels( tupleLabels = test_set_df['data_split_label'] )
+
+
 		"""
 
 		'tuple' is a row of a Dataframe i.e. a Series
@@ -277,11 +329,11 @@ class Evaluator:
 
 		"""
 
-		for iteration_no in range(num_of_tuples_to_use):
+		for iteration_no in range( test_set_df.shape[0] ):
 			tuple = dataset.getNextTuple()
-			if tuple['data_split_label'] == 'Train':
+			if tuple['data_split_label'] == 'TrainTuple':
 				model.update_model(tuple)
-			elif tuple['data_split_label'] == 'Test':
+			elif tuple['data_split_label'] == 'TestTuple':
 				list_of_recommendations = model.test_model(tuple['userID'])
 				self.evaluateList(list_of_recommendations, tuple)
 

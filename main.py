@@ -23,7 +23,7 @@ training_set = deskdrop_dataset.getTraining()
 popularity_model.train_in_batch(training_set=training_set)
 
 # do Validation
-validation_set = deskdrop_dataset.getValidation()
+validation_set = deskdrop_dataset.getValidation(exclude_first_time_users = False)
 recommendation_df = popularity_model.predict_in_batch(validation_set=validation_set)
 validation_results = evaluator.evaluate_Validation_Recommendations(recommendation_df, validation_set )
 

@@ -132,7 +132,7 @@ class Dataset:
 		return type: pd.DataFrame
 
 		"""
-		return self.time_arranged_interactions_df.iloc[:self.train_size ,:]
+		return self.time_arranged_interactions_df.iloc[:self.train_size ,:].copy()
 
 		
 
@@ -159,7 +159,7 @@ class Dataset:
 			training_set = self.getTraining()
 			unique_userID = training_set['userID'].unique()
 
-			return validation_set.loc[validation_set['userID'].isin(unique_userID) ]
+			return validation_set.loc[validation_set['userID'].isin(unique_userID) ].copy()
 
 	def getTesting(self):
 		"""
@@ -170,7 +170,7 @@ class Dataset:
 
 		return type: pd.DataFrame
 		"""
-		return self.time_arranged_interactions_df.iloc[self.train_and_validation_size: ,:]
+		return self.time_arranged_interactions_df.iloc[self.train_and_validation_size: ,:].copy()
 
 	def updateTupleLabels(self, tupleLabels):
 

@@ -47,6 +47,8 @@ class Dataset:
 		Attribute 'self.time_arranged_interactions_df' is a dataframe containing user-item interactions where each row is a tuple of the following format: <time, userID, itemID, action, data_split_label>
 		type: pd.DataFrame
 
+		Attribute 'self.initial_data_split_label' is a np.array that contains the initial data split labels for each row in self.time_arranged_interactions_df.
+
 		"""
 		if np.sum(partition_ratios) != 1.0 :
 			raise ValueError("partition_ratios does not add up to 1!")
@@ -56,14 +58,16 @@ class Dataset:
 		self.train_and_validation_size = None
 		self.curr_pointer = None
 		self.time_arranged_interactions_df = None 
+		self.initial_data_split_label = None
 
 
 
 	def getNextTuple(self):
 		"""
 		Return a tuple of the following format <time, userID, itemID, action, data_split_label> that could either be a train or test tuple. 
-		Note that this function requires the use of self.curr_pointer, which is initialized by the split_dataset() function. Rather than calling split_dataset(), it is equally appropriate
-		to manually set the self.curr_pointer, which should be initialized to be the index of the first test sample in self.time_arranged_interactions_df i.e. the first data sample after the Validation Set
+		Note that this function requires the use of self.curr_pointer, which is initialized by the self.set_curr_pointer() function. Rather than calling split_dataset(), it is equally appropriate
+		to manually set the self.curr_pointer, which should be initialized to be the index of the first validation sample in self.time_arranged_interactions_df if doing validation, 
+		and should be initialized to index of first test sample if doing testing.
 
 		Return type: pd.Series object
 
@@ -86,8 +90,8 @@ class Dataset:
 		Split a dataset into training set, validation set, and test set by giving data split labels to each data sample
 		Note that when a data split label will be either 'Train', 'Valid' or 'Test', and it means the data sample is in training set, validation set, or test set respectively.
 		Return a time ordered df that has an additional column 'data_split_label', which specifies whether the sample is in train, validation, or test set.
-		This function will set self.curr_pointer to be the index of the first test sample in self.time_arranged_interactions_df i.e. the first data sample after the Validation Set
 		This function will also set self.train_size and self.train_and_validation_size, which are both int type and indicate the size of training set and the size of training + validation set respectively
+		This function will also set self.initial_data_split_label, which is needed before 'self.updateTupleLabels()' can be called.
 
 		Return type: pd.DataFrame object
 		"""
@@ -102,8 +106,6 @@ class Dataset:
 		self.train_size = round(train_data_proportion * num_of_obs)
 		self.train_and_validation_size = round(train_and_validation_data_proportion * num_of_obs)
 
-		self.curr_pointer = self.train_and_validation_size # initializing self.curr_pointer, which is required in order to call getNextTuple().
-
 		data_split_boolean_labels = np.repeat(False, repeats = num_of_obs)
 		train_boolean_labels = data_split_boolean_labels.copy()
 		train_boolean_labels[:self.train_size] = True
@@ -117,8 +119,30 @@ class Dataset:
 		data_split_labels[test_boolean_labels] = 'Test'
 	
 		time_ordered_df['data_split_label'] = data_split_labels
+		self.initial_data_split_label = data_split_labels.copy() # To be used for reseting the data_split_labels.
 
 		return time_ordered_df
+
+	def set_curr_pointer(self, mode='Testing'):
+
+		"""
+		Note: To use this method, the self.train_and_validation_size and self.train_size must be set. They are set by calling the self.split_dataset() function.
+
+		param 'mode' can either be 'Testing' or 'Validation'.
+		If 'Testing', the self.curr_pointer is set to the index of the first data sample in the Testing set.
+		If 'Validation', the self.curr_pointer is set to the index of the first data sample in the Validation set.
+
+		This method will set the attribute self.curr_pointer
+
+		"""
+		if mode == 'Testing':
+			self.curr_pointer = self.train_and_validation_size
+		elif mode == 'Validation':
+			self.curr_pointer = self.train_size
+		else:
+			raise ValueError("The 'mode' argument given to 'set_curr_pointer()' is invalid. It can only be a string of 'Testing' or 'Validation'.")
+
+
 
 
 	def getTraining(self):
@@ -172,24 +196,60 @@ class Dataset:
 		"""
 		return self.time_arranged_interactions_df.iloc[self.train_and_validation_size: ,:].copy()
 
-	def updateTupleLabels(self, tupleLabels):
+	def updateTupleLabels(self, tupleLabels, subset= 'test_set'):
 
 		"""
-		param 'tupleLabels': a column of tuple labels for the Testing Set.
+		param 'tupleLabels': a column of new tuple labels for either the 1.Testing set or 2.Validation set.
 		type: pd.Series
 
-		Update the Tuple labels in the Testing Set.
+		param 'subset' can either take the value of 'test_set' or 'validation_set'.
+		If 'test_set', only the Testing set will be updated.
+		If 'validation_set', only Validation set will be updated.
+
+		Update the Tuple labels in either 1.Testing set or 2.Validation set.
 
 		No return object.
 
 		"""
-		if len(tupleLabels) !=  (len(self.time_arranged_interactions_df) - self.train_and_validation_size):
-			raise ValueError("length of 'tupleLabels' is inconsistent with the Testing Set ")
-		
-		updated_tuple_labels = self.time_arranged_interactions_df['data_split_label'].iloc[:self.train_and_validation_size]
-		updated_tuple_labels = pd.concat([updated_tuple_labels, tupleLabels], axis=0, ignore_index=True)
-		self.time_arranged_interactions_df['data_split_label'] =  updated_tuple_labels
 
+		if subset == 'test_set':
+			if len(tupleLabels) !=  (len(self.time_arranged_interactions_df) - self.train_and_validation_size):
+				raise ValueError("length of 'tupleLabels' is inconsistent with the Testing Set ")
+			
+			updated_tuple_labels = self.time_arranged_interactions_df['data_split_label'].iloc[:self.train_and_validation_size]
+			updated_tuple_labels = pd.concat([updated_tuple_labels, tupleLabels], axis=0, ignore_index=True)
+			self.time_arranged_interactions_df['data_split_label'] =  updated_tuple_labels
+
+		elif subset == 'validation_set':
+			validation_size = self.train_and_validation_size - self.train_size
+			if len(tupleLabels) !=  validation_size :
+				raise ValueError("length of 'tupleLabels' is inconsistent with the Validation set ")
+			
+			updated_tuple_labels_1 = self.time_arranged_interactions_df['data_split_label'].iloc[:self.train_size]
+			updated_tuple_labels_2 = self.time_arranged_interactions_df['data_split_label'].iloc[self.train_and_validation_size:]
+			updated_tuple_labels = pd.concat([updated_tuple_labels_1, tupleLabels, updated_tuple_labels_2], axis=0, ignore_index=True)
+			self.time_arranged_interactions_df['data_split_label'] =  updated_tuple_labels
+
+		else:
+			raise ValueError("'subset' must be a string containing either 'test_set' or 'validation_set'")
+
+
+
+	def resetTupleLabels(self):
+		"""
+		Note: 'resetTupleLabels()' requires 'self.initial_data_split_label' to be set, and it is set only when 'split_dataset()' is called.
+		It is equally appropriate for self.initial_data_split_label to be set manually somewhere in custom codes written by users of this framework.
+		The attribute 'self.initial_data_split_label' is a np.array that contains the initial data split labels for each row in self.time_arranged_interactions_df.
+
+		To reset the Tuple labels in the entire dataset to their initial values.
+
+		No return object
+
+		"""
+		if self.initial_data_split_label is None:
+			raise Exception("self.initial_data_split_label is not set. It is onlt set when split_dataset() is called.")
+
+		self.time_arranged_interactions_df['data_split_label'] =  self.initial_data_split_label.copy()
 
 
 

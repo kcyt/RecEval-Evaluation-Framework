@@ -7,7 +7,7 @@ from surprise import Reader as surprise_reader
 from collections import defaultdict
 
 """
-Implementation of the DecayPopularityModel is based on the algorithm provided by the paper 'A Re-visit of the Popularity Baseline in Recommender Systems' by Yitong Ji
+Implementation of the ItemKNNModel using the surprise library.
 """
 
 

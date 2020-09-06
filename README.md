@@ -1,1 +1,1 @@
-# Sequential-RecSys-Evaluation-Framework
+# RecEval-Evaluation-Framework

@@ -23,7 +23,7 @@ To illustate, we would show how to evaluate a popularity model with the Deskdrop
 ## Available Algorithms
 We provide a few recommendation algorithms to function as benchmarks:
 - Popularity Model: Based on all the tuples have been fed into the model for training, recommend the top N most popular items. Popularity of an item is computed based on its interaction count.
-- Decay Popularity Model: It uses an exponential weighted sliding window to compute the top N most popular items for each test tuple. The top N most popular items recommended for a test tuple would have the most user-item interactions within the window after factoring time-weighting, which gives older interactions exponentially less weight.
+- Decay Popularity Model (by Ji in https://arxiv.org/pdf/2005.13829.pdf): It uses an exponential weighted sliding window to compute the top N most popular items for each test tuple. The top N most popular items recommended for a test tuple would have the most user-item interactions within the window after factoring time-weighting, which gives older interactions exponentially less weight.
 - ItemKNN Model
 - Singular Value Decomposition (SVD) Model
 - NMF Model 
@@ -31,7 +31,7 @@ We provide a few recommendation algorithms to function as benchmarks:
 
 ## Available Datasets
 RecEval contains a few popular recommendation datasets used for convenience:
-- MovieLens Dataset 
+- MovieLens Dataset (https://grouplens.org/datasets/movielens/)
 - CI\&T Deskdrop Dataset (https://www.kaggle.com/gspmoreira/articles-sharing-reading-from-cit-deskdrop)
 - LastFM Dataset (http://www.lastfm.com)
 - Amazon Automotive Dataset (http://jmcauley.ucsd.edu/data/amazon)

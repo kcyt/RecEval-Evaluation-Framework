@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd 
-from model import Model
+from .model import Model
 
 
 

@@ -1,6 +1,6 @@
 import pandas as pd
-from dataset import Deskdrop_Dataset
-from SVD_model import SVD_Model
+from datasets.deskdrop_dataset import Deskdrop_Dataset
+from models.SVD_model import SVD_Model
 from evaluator import Evaluator
 
 """

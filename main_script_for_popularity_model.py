@@ -1,6 +1,6 @@
 import pandas as pd 
-from dataset import Deskdrop_Dataset
-from popularity_model import PopularityModel
+from datasets.deskdrop_dataset import Deskdrop_Dataset
+from models.popularity_model import PopularityModel
 from evaluator import Evaluator
 
 """

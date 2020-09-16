@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
-from dataset import Dataset
-from model import Model
+from datasets.dataset import Dataset
+from models.model import Model
 
 
 class Evaluator:

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd 
-from model import Model
+from .model import Model
 from surprise import KNNBasic as surprise_KNNBasic
 from surprise import Dataset as surprise_dataset
 from surprise import Reader as surprise_reader

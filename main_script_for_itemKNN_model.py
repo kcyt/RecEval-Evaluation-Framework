@@ -1,6 +1,6 @@
 import pandas as pd
-from dataset import Deskdrop_Dataset
-from itemKNN import ItemKNNModel
+from datasets.deskdrop_dataset import Deskdrop_Dataset
+from models.itemKNN_model import ItemKNNModel
 from evaluator import Evaluator
 
 """

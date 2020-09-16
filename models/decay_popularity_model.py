@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd 
-from model import Model
+from .model import Model
 
 """
 Implementation of the DecayPopularityModel is based on the algorithm provided by the paper 'A Re-visit of the Popularity Baseline in Recommender Systems' by Yitong Ji

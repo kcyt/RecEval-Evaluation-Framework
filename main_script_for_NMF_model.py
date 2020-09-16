@@ -1,6 +1,6 @@
 import pandas as pd
-from dataset import Deskdrop_Dataset
-from NMF_model import NMF_Model
+from datasets.deskdrop_dataset import Deskdrop_Dataset
+from models.NMF_model import NMF_Model
 from evaluator import Evaluator
 
 """

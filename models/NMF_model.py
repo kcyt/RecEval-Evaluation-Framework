@@ -1,21 +1,21 @@
 import numpy as np
 import pandas as pd 
-from model import Model
-from surprise import SVD as surprise_SVD
+from .model import Model
+from surprise import NMF as surprise_NMF
 from surprise import Dataset as surprise_dataset
 from surprise import Reader as surprise_reader
 from collections import defaultdict
 
 """
-Implementation of the SVD model using the surprise library.
+Implementation of the NMF model using the surprise library.
 """
 
 
-class SVD_Model(Model):
+class NMF_Model(Model):
 
 	def __init__(self, n = 20, time_delay_from_t0 = 180,  num_of_interval = 6  ):
 		"""
-		Attribute 'self.accumulative_tuple_df' is a DataFrame used to contain the tuples which have been given to SVD_Model for training. 
+		Attribute 'self.accumulative_tuple_df' is a DataFrame used to contain the tuples which have been given to NMF_Model for training. 
 		type: pd.DataFrame
 
 		Attribute 'self.event_type_strength' will convert an interaction event into a 
@@ -23,8 +23,8 @@ class SVD_Model(Model):
 		type: int/float/double
 
 
-		Attribute 'self.engine' is an instance of the SVD class from surprise library. It functions as the underlying engine for the SVD_Model.
-		type: The SVD class from surprise library.
+		Attribute 'self.engine' is an instance of the NMF class from surprise library. It functions as the underlying engine for the NMF_Model.
+		type: The NMF class from surprise library.
 
 
 		"""
@@ -42,7 +42,7 @@ class SVD_Model(Model):
 				'COMMENT': 4.0,  
 				} 
 
-		self.engine = surprise_SVD()
+		self.engine = surprise_NMF()
 
 
 
@@ -72,13 +72,13 @@ class SVD_Model(Model):
 		param 'test_tuple_timestamp' is unix timestamp of the user-item interaction represented by the test tuple. 
 		type: int 
 
-		Return a dataframe containing the top n items that is recommended by the SVD_Model model.
+		Return a dataframe containing the top n items that is recommended by the NMF_Model model.
 
 		Return type: pd.Dataframe
 
 		"""
 
-		# if first tuple given to the model is a test tuple, then the SVD_Model model will not be able to make any recommendations
+		# if first tuple given to the model is a test tuple, then the NMF_Model model will not be able to make any recommendations
 		if self.accumulative_tuple_df is None:
 			return None 
 
@@ -89,7 +89,7 @@ class SVD_Model(Model):
 		data = surprise_dataset.load_from_df(df, reader)
 		trainset = data.build_full_trainset()
 
-		# train the SVD_Model model.
+		# train the NMF_Model model.
 		self.engine.fit(trainset) 
 
 		# generate predictions for test_tuple_userID by assessing how interested 

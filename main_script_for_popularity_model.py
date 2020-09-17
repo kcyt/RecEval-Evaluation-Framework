@@ -9,7 +9,6 @@ But your dataset object must be a subclass of Dataset defined in dataset.py and 
 and your model object must be a subclass of Model defined in model.py and implement its abstract methods.
 """
 
-
 # tunable parameters
 num_of_recommendations = 5 # number of recommendations to be given by the model.
 n_ranks=[1, 3, 5] # For defining the metrics e.g. if n_ranks = [1,5], and the metrics used is RECALL, then RECALL@1 and RECALL@5 will be used
@@ -23,11 +22,17 @@ evaluator = Evaluator(n_ranks=n_ranks)
 training_set = deskdrop_dataset.getTraining()
 popularity_model.train_in_batch(dataset=training_set)
 
-# do Validation
+# do Validation in static environment
 deskdrop_dataset.set_curr_pointer(mode='Validation')
 validation_set = deskdrop_dataset.getValidation(exclude_first_time_users = False)
 recommendation_df = popularity_model.predict_in_batch(validation_set=validation_set)
 validation_results = evaluator.evaluate_validation_set_in_batch(recommendation_df, validation_set )
+
+"""
+# do Validation in stream environment 
+deskdrop_dataset.set_curr_pointer(mode='Validation')
+validation_results = evaluator.evaluate_model_in_stream( dataset=deskdrop_dataset, model=popularity_model, mode='Validation', scheme = [0.9,0.1])
+"""
 
 # Training with both Training and Validation sets:
 train_and_validate_sets = pd.concat([training_set, validation_set])
